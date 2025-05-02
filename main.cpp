@@ -1,91 +1,82 @@
 #include <iostream>
-#include <atomic>
-#include <utility>
+#include <cassert>
+#include "SharedPtr.hpp"
 
-struct ControlBlock {
-    std::atomic<std::size_t> strong_count{1};
-};
+void test_basic_reference_counting() {
+    std::cout << "== Running Basic Reference Counting Test ==\n";
 
-template<typename T>
-class SharedPtr {
-private:
-    T*              ptr;
-    ControlBlock*   ctrl;
+    SharedPtr<int> p(new int(123));
+    std::cout << "  After creation: p.use_count() = " << p.use_count() << " (expected 1)\n";
+    assert(p.use_count() == 1);
 
-    void release() {
-        if (ctrl && ctrl->strong_count.fetch_sub(1) == 1) {
-            delete ptr;
-            delete ctrl;
-        }
-    }
+    SharedPtr<int> q(p);
+    std::cout << "  After copy-ctor: p.use_count() = " << p.use_count()
+              << ", q.use_count() = " << q.use_count() << " (expected 2, 2)\n";
+    assert(p.use_count() == 2);
+    assert(q.use_count() == 2);
 
-public:
-    SharedPtr() : ptr(nullptr), ctrl(nullptr) {}
+    SharedPtr<int> r;
+    r = p;
+    std::cout << "  After assignment: p.use_count() = " << p.use_count()
+              << ", r.use_count() = " << r.use_count() << " (expected 3, 3)\n";
+    assert(p.use_count() == 3);
+    assert(r.use_count() == 3);
 
-    explicit SharedPtr(T* p) : ptr(p), ctrl(p ? new ControlBlock{} : nullptr) {}
+    r.reset();
+    std::cout << "  After r.reset(): r.use_count() = " << r.use_count()
+              << ", p.use_count() = " << p.use_count() << " (expected 0, 2)\n";
+    assert(r.use_count() == 0);
+    assert(p.use_count() == 2);
 
-    SharedPtr(SharedPtr const& other) : ptr(other.ptr), ctrl(other.ctrl)
-    {
-        if (ctrl)
-            ctrl->strong_count.fetch_add(1, std::memory_order_relaxed);
-    }
+    p.reset();
+    q.reset();
+    std::cout << "  After p.reset() & q.reset(): p.use_count() = " << p.use_count()
+              << ", q.use_count() = " << q.use_count() << " (expected 0, 0)\n";
+    assert(p.use_count() == 0);
+    assert(q.use_count() == 0);
 
-    SharedPtr& operator=(SharedPtr const& other) {
-        if (this != &other) {
-            release();
-            ptr  = other.ptr;
-            ctrl = other.ctrl;
-            if (ctrl)
-                ctrl->strong_count.fetch_add(1, std::memory_order_relaxed);
-        }
-        return *this;
-    }
+    std::cout << "[PASS] Basic Reference Counting\n\n";
+}
 
-    ~SharedPtr() {
-        release();
-    }
+void test_self_assignment() {
+    std::cout << "== Running Self-Assignment Test ==\n";
 
-    void reset(T* p = nullptr) {
-        release();
-        if (p) {
-            ptr  = p;
-            ctrl = new ControlBlock{};
-        } else {
-            ptr  = nullptr;
-            ctrl = nullptr;
-        }
-    }
+    SharedPtr<int> a(new int(5));
+    std::cout << "  After creation: a.use_count() = " << a.use_count() << " (expected 1)\n";
+    assert(a.use_count() == 1);
 
-    void swap(SharedPtr& other) {
-        std::swap(ptr,  other.ptr);
-        std::swap(ctrl, other.ctrl);
-    }
+    a = a;
+    std::cout << "  After self-assignment: a.use_count() = " << a.use_count() << " (expected 1)\n";
+    assert(a.use_count() == 1);
 
-    T* get() const { return ptr; }
+    std::cout << "[PASS] Self-Assignment\n\n";
+}
 
-    T&   operator*()  const { return *ptr; }
-    T*   operator->() const { return ptr; }
-    
-    T&   operator[](std::size_t i)       { return ptr[i]; }
-    const T& operator[](std::size_t i) const { return ptr[i]; }
+void test_swap() {
+    std::cout << "== Running Swap Test ==\n";
 
-    std::size_t use_count() const {
-        return ctrl ? ctrl->strong_count.load(std::memory_order_relaxed) : 0;
-    }
+    SharedPtr<int> a(new int(1));
+    SharedPtr<int> b(new int(2));
+    std::cout << "  Before swap: a.use_count() = " << a.use_count()
+              << ", b.use_count() = " << b.use_count() << " (expected 1, 1)\n";
+    assert(a.use_count() == 1 && b.use_count() == 1);
 
-    bool unique() const {
-        return use_count() == 1;
-    }
-};
+    a.swap(b);
+    std::cout << "  After swap: a.use_count() = " << a.use_count()
+              << ", b.use_count() = " << b.use_count() << " (expected 1, 1)\n";
+    assert(a.use_count() == 1);
+    assert(b.use_count() == 1);
+
+    std::cout << "[PASS] Swap Operation\n\n";
+}
 
 int main() {
-    SharedPtr<int> p1(new int(42));
-    SharedPtr<int> p2(p1);
-    p2 = p1;
-    p1 = p2;
-    p1.reset();
-    p2.reset();
-    std::cout << "p1 use count: " << p1.use_count() << std::endl;
-    std::cout << "p2 use count: " << p2.use_count() << std::endl;
+    std::cout << "=== SharedPtr Unit Tests ===\n\n";
+
+    test_basic_reference_counting();
+    test_self_assignment();
+    test_swap();
+
+    std::cout << "=== All tests completed successfully ===\n";
     return 0;
 }
