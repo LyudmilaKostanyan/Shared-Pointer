@@ -6,11 +6,11 @@ This project implements a simplified, thread-safe `SharedPtr<T>` in C++ with man
 
 ## Problem Description
 
-Understanding how `std::shared_ptr` works under the hood can deepen your grasp of smart pointers and ownership models. Here, we build:
+`std::shared_ptr` provides shared ownership of dynamically allocated objects with automatic deletion when the last owner is destroyed. Manual implementation exposes internal mechanics. Key elements include:
 
-* A **control block** on the heap holding the strong reference count.
-* A `SharedPtr<T>` class that manages that count via atomic operations.
-* Correct destruction of both the managed object and its control block when no owners remain.
+* A heap-allocated control block that holds an atomic strong reference count.
+* A `SharedPtr<T>` class that manages increments and decrements of that count.
+* Automatic destruction of both the managed object and its control block when the strong count reaches zero.
 
 ## Implemented Features
 
